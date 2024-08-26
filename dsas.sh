@@ -2,7 +2,7 @@
 
 # Nome e versao do sistema
 SYSTEM_NAME="Dolutech Security Automate System (DSAS)"
-VERSION="0.0.1"
+VERSION="0.0.2"
 DSAS_DIR="/opt/DSAS"
 LOG_DIR="$DSAS_DIR/logs"
 VERSION_DIR="$DSAS_DIR/version"
@@ -10,7 +10,7 @@ LOG_FILE="$LOG_DIR/dsas.log"
 VERSION_FILE="$VERSION_DIR/version.txt"
 SCRIPT_NAME="dsas.sh"
 SCRIPT_PATH="$DSAS_DIR/$SCRIPT_NAME"
-GITHUB_REPO="https://github.com/dolutech/Dolutech-Security-Automate-System/blob/main"
+GITHUB_REPO_RAW="https://raw.githubusercontent.com/dolutech/Dolutech-Security-Automate-System/main"
 
 # Funcao para detectar a distribuicao
 detect_distro() {
@@ -52,21 +52,21 @@ setup_environment() {
     fi
 
     if [ ! -f "$VERSION_FILE" ]; then
-        curl -o "$VERSION_FILE" "$GITHUB_REPO/version.txt"
+        curl -o "$VERSION_FILE" "$GITHUB_REPO_RAW/version.txt"
     fi
 }
 
 # Funcao para verificar e baixar a versao mais recente do script
 check_for_updates() {
     local new_version_file="/tmp/version.txt"
-    curl -o "$new_version_file" "$GITHUB_REPO/version.txt"
+    curl -o "$new_version_file" "$GITHUB_REPO_RAW/version.txt"
 
     if ! diff "$VERSION_FILE" "$new_version_file" > /dev/null; then
         echo "Foi encontrada uma nova versao do Dolutech Security Automate System. Iremos efetuar a atualizacao."
         read -p "Pressione Enter para atualizar..."
 
         # Baixar o novo script
-        curl -o "$SCRIPT_PATH" "$GITHUB_REPO/$SCRIPT_NAME"
+        curl -o "$SCRIPT_PATH" "$GITHUB_REPO_RAW/$SCRIPT_NAME"
 
         # Dar permissao de execucao ao novo script
         chmod +x "$SCRIPT_PATH"
@@ -147,6 +147,30 @@ setup_2fa() {
     read -p "Pressione Enter para voltar ao menu..."
 }
 
+# Funcao para remover 2FA do SSH
+remove_2fa() {
+    echo "Removendo configuracoes do 2FA..."
+
+    # Removendo a linha do 2FA no arquivo pam.d/sshd
+    sudo sed -i '/auth required pam_google_authenticator.so/d' /etc/pam.d/sshd
+
+    # Revertendo a linha ChallengeResponseAuthentication para no
+    if grep -q "^ChallengeResponseAuthentication yes" /etc/ssh/sshd_config; then
+        sudo sed -i "s/^ChallengeResponseAuthentication yes/ChallengeResponseAuthentication no/" /etc/ssh/sshd_config
+    fi
+
+    # Desinstalando o google-authenticator
+    if [ "$DISTRO" = "debian" ]; then
+        sudo apt-get remove --purge -y libpam-google-authenticator
+    elif [ "$DISTRO" = "rhel" ]; then
+        sudo yum remove -y google-authenticator
+    fi
+
+    restart_ssh
+    echo "2FA removido com sucesso." | tee -a $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
 # Funcao para reiniciar o SSH
 restart_ssh() {
     if [ "$DISTRO" = "debian" ]; then
@@ -161,6 +185,18 @@ restart_ssh() {
         echo "Erro ao reiniciar o servico SSH." | tee -a $LOG_FILE
     fi
     read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para reiniciar o servidor
+reboot_server() {
+    read -p "Tem certeza que deseja reiniciar o servidor? (s/n): " confirm
+    if [[ $confirm =~ ^[Ss]$ ]]; then
+        read -p "Pressione Enter novamente para confirmar o reinicio do servidor..."
+        sudo reboot
+    else
+        echo "Reinicio do servidor cancelado." | tee -a $LOG_FILE
+        read -p "Pressione Enter para voltar ao menu..."
+    fi
 }
 
 # Funcao para bloquear porta no servidor
@@ -259,38 +295,42 @@ main_menu() {
         echo "============================================"
         echo "1) Alterar porta SSH"
         echo "2) Configurar 2FA no SSH"
-        echo "3) Bloqueio de Portas do Servidor"
-        echo "4) Desbloqueio de Porta no Servidor"
-        echo "5) Bloqueio de IP"
-        echo "6) Desbloqueio de IP"
-        echo "7) Liberar Porta para um IP Especifico"
-        echo "8) Remover Liberacao de Porta para um IP Especifico"
-        echo "9) Limpar Todas as Regras Criadas"
-        echo "10) Fazer Verificacao Completa do Antivirus"
-        echo "11) Verificacao Personalizada do Antivirus"
-        echo "12) Reiniciar SSH"
-        echo "13) Ver Logs"
-        echo "14) Limpar Logs"
-        echo "15) Sair"
+        echo "3) Remover 2FA no SSH"
+        echo "4) Bloqueio de Portas do Servidor"
+        echo "5) Desbloqueio de Porta no Servidor"
+        echo "6) Bloqueio de IP"
+        echo "7) Desbloqueio de IP"
+        echo "8) Liberar Porta para um IP Especifico"
+        echo "9) Remover Liberacao de Porta para um IP Especifico"
+        echo "10) Limpar Todas as Regras Criadas"
+        echo "11) Fazer Verificacao Completa do Antivirus"
+        echo "12) Verificacao Personalizada do Antivirus"
+        echo "13) Reiniciar SSH"
+        echo "14) Reiniciar Servidor"
+        echo "15) Ver Logs"
+        echo "16) Limpar Logs"
+        echo "17) Sair"
         echo "============================================"
         read -p "Escolha uma opcao: " option
 
         case $option in
             1) change_ssh_port ;;
             2) setup_2fa ;;
-            3) block_port ;;
-            4) unblock_port ;;
-            5) block_ip ;;
-            6) unblock_ip ;;
-            7) allow_ip_port ;;
-            8) remove_allow_ip_port ;;
-            9) clear_all_rules ;;
-            10) full_scan ;;
-            11) custom_scan ;;
-            12) restart_ssh ;;
-            13) view_logs ;;
-            14) clear_logs ;;
-            15) 
+            3) remove_2fa ;;
+            4) block_port ;;
+            5) unblock_port ;;
+            6) block_ip ;;
+            7) unblock_ip ;;
+            8) allow_ip_port ;;
+            9) remove_allow_ip_port ;;
+            10) clear_all_rules ;;
+            11) full_scan ;;
+            12) custom_scan ;;
+            13) restart_ssh ;;
+            14) reboot_server ;;
+            15) view_logs ;;
+            16) clear_logs ;;
+            17) 
                 echo "Voce acabou de sair do $SYSTEM_NAME"
                 echo "Caso precise de suporte e ajuda acesse nosso site https://dolutech.com"
                 exit 0
