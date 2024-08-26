@@ -16,7 +16,7 @@ GITHUB_REPO_RAW="https://raw.githubusercontent.com/dolutech/Dolutech-Security-Au
 detect_distro() {
     if [ -f /etc/debian_version ]; then
         DISTRO="debian"
-    elif [ -f /etc/redhat-release ]; então
+    elif [ -f /etc/redhat-release ]; then
         DISTRO="rhel"
     else
         echo "Sistema operacional nao suportado." | tee -a $LOG_FILE
@@ -31,27 +31,27 @@ setup_path() {
 
 # Funcao para criar o diretorio do sistema e os arquivos necessarios
 setup_environment() {
-    if [ ! -d "$DSAS_DIR" ]; então
+    if [ ! -d "$DSAS_DIR" ]; then
         mkdir -p $DSAS_DIR
     fi
 
-    if [ ! -d "$LOG_DIR" ]; então
+    if [ ! -d "$LOG_DIR" ]; then
         mkdir -p $LOG_DIR
     fi
 
-    if [ ! -d "$VERSION_DIR" ]; então
+    if [ ! -d "$VERSION_DIR" ]; then
         mkdir -p $VERSION_DIR
     fi
 
-    if [ ! -f "$LOG_FILE" ]; então
+    if [ ! -f "$LOG_FILE" ]; then
         touch $LOG_FILE
     fi
 
-    if [ ! -f "$SCRIPT_PATH" ]; então
+    if [ ! -f "$SCRIPT_PATH" ]; then
         mv "$0" "$SCRIPT_PATH"
     fi
 
-    if [ ! -f "$VERSION_FILE" ]; então
+    if [ ! -f "$VERSION_FILE" ]; then
         curl -o "$VERSION_FILE" "$GITHUB_REPO_RAW/version.txt"
     fi
 }
@@ -61,7 +61,7 @@ check_for_updates() {
     local new_version_file="/tmp/version.txt"
     curl -o "$new_version_file" "$GITHUB_REPO_RAW/version.txt"
 
-    if ! diff "$VERSION_FILE" "$new_version_file" > /dev/null; então
+    if ! diff "$VERSION_FILE" "$new_version_file" > /dev/null; then
         echo "Foi encontrada uma nova versao do Dolutech Security Automate System. Iremos efetuar a atualizacao."
         read -p "Pressione Enter para atualizar..."
 
@@ -84,11 +84,11 @@ check_for_updates() {
 # Funcao para instalar ClamAV
 install_clamav() {
     echo "Verificando instalacao do ClamAV..." | tee -a $LOG_FILE
-    if ! command -v clamscan &> /dev/null; então
+    if ! command -v clamscan &> /dev/null; then
         echo "ClamAV nao encontrado, instalando..." | tee -a $LOG_FILE
-        if [ "$DISTRO" = "debian" ]; então
+        if [ "$DISTRO" = "debian" ]; then
             sudo apt-get update && sudo apt-get install -y clamav clamav-daemon
-        elif [ "$DISTRO" = "rhel" ]; então
+        elif [ "$DISTRO" = "rhel" ]; then
             sudo yum install -y epel-release && sudo yum install -y clamav clamav-update
         fi
     else
@@ -101,9 +101,9 @@ change_ssh_port() {
     read -p "Digite a nova porta SSH: " new_port
 
     # Substituindo a linha Port independentemente do valor atual
-    if grep -q "^#Port" /etc/ssh/sshd_config; então
+    if grep -q "^#Port" /etc/ssh/sshd_config; then
         sudo sed -i "s/^#Port.*/Port $new_port/" /etc/ssh/sshd_config
-    elif grep -q "^Port" /etc/ssh/sshd_config; então
+    elif grep -q "^Port" /etc/ssh/sshd_config; then
         sudo sed -i "s/^Port.*/Port $new_port/" /etc/ssh/sshd_config
     else
         echo "Port $new_port" | sudo tee -a /etc/ssh/sshd_config
@@ -121,7 +121,7 @@ setup_2fa() {
     sudo google-authenticator
 
     # Verifica se a linha do 2FA ja existe no arquivo pam.d/sshd
-    if ! grep -q "auth required pam_google_authenticator.so" /etc/pam.d/sshd; então
+    if ! grep -q "auth required pam_google_authenticator.so" /etc/pam.d/sshd; then
         sudo sed -i '/@include common-auth/a auth required pam_google_authenticator.so' /etc/pam.d/sshd
         echo "Configuracao do 2FA adicionada no arquivo /etc/pam.d/sshd." | tee -a $LOG_FILE
     else
@@ -129,16 +129,16 @@ setup_2fa() {
     fi
 
     # Adicionando ou substituindo a linha ChallengeResponseAuthentication no sshd_config
-    if grep -q "^# Change to yes to enable challenge-response passwords" /etc/ssh/sshd_config; então
+    if grep -q "^# Change to yes to enable challenge-response passwords" /etc/ssh/sshd_config; then
         sudo sed -i "/^# Change to yes to enable challenge-response passwords/a ChallengeResponseAuthentication yes" /etc/ssh/sshd_config
-    elif grep -q "^ChallengeResponseAuthentication" /etc/ssh/sshd_config; então
+    elif grep -q "^ChallengeResponseAuthentication" /etc/ssh/sshd_config; then
         sudo sed -i "s/^ChallengeResponseAuthentication.*/ChallengeResponseAuthentication yes/" /etc/ssh/sshd_config
     else
         echo "ChallengeResponseAuthentication yes" | sudo tee -a /etc/ssh/sshd_config
     fi
 
     # Comentando a linha KbdInteractiveAuthentication
-    if grep -q "^KbdInteractiveAuthentication" /etc/ssh/sshd_config; então
+    if grep -q "^KbdInteractiveAuthentication" /etc/ssh/sshd_config; then
         sudo sed -i "s/^KbdInteractiveAuthentication.*/#&/" /etc/ssh/sshd_config
     fi
 
@@ -155,14 +155,14 @@ remove_2fa() {
     sudo sed -i '/auth required pam_google_authenticator.so/d' /etc/pam.d/sshd
 
     # Revertendo a linha ChallengeResponseAuthentication para no
-    if grep -q "^ChallengeResponseAuthentication yes" /etc/ssh/sshd_config; então
+    if grep -q "^ChallengeResponseAuthentication yes" /etc/ssh/sshd_config; then
         sudo sed -i "s/^ChallengeResponseAuthentication yes/ChallengeResponseAuthentication no/" /etc/ssh/sshd_config
     fi
 
     # Desinstalando o google-authenticator
-    if [ "$DISTRO" = "debian" ]; então
+    if [ "$DISTRO" = "debian" ]; then
         sudo apt-get remove --purge -y libpam-google-authenticator
-    elif [ "$DISTRO" = "rhel" ]; então
+    elif [ "$DISTRO" = "rhel" ]; then
         sudo yum remove -y google-authenticator
     fi
 
@@ -208,7 +208,7 @@ fix_cves() {
     # Perguntar ao usuário se ele possui 2FA configurado
     read -p "Você usa 2FA no SSH (s/n)? " use_2fa
 
-    if [[ $use_2fa =~ ^[Ss]$ ]]; então
+    if [[ $use_2fa =~ ^[Ss]$ ]]; then
         sudo ./configure --with-pam
     else
         sudo ./configure
@@ -229,8 +229,8 @@ fix_cves() {
     sudo systemctl restart ssh
 
     # Passo 6: Verificar se o serviço está usando a versão nova
-    if ps aux | grep sshd | grep -q "/usr/sbin/sshd"; então
-        if /usr/sbin/sshd -v | grep -q "OpenSSH_9.8p1"; então
+    if ps aux | grep sshd | grep -q "/usr/sbin/sshd"; then
+        if /usr/sbin/sshd -v | grep -q "OpenSSH_9.8p1"; then
             echo "O SSH está usando a versão atualizada."
         else
             sudo ln -sf /usr/local/sbin/sshd /usr/sbin/sshd
@@ -254,13 +254,13 @@ fix_cves() {
 
 # Funcao para reiniciar o SSH
 restart_ssh() {
-    if [ "$DISTRO" = "debian" ]; então
+    if [ "$DISTRO" = "debian" ]; then
         sudo systemctl restart ssh
-    elif [ "$DISTRO" = "rhel" ]; então
+    elif [ "$DISTRO" = "rhel" ]; then
         sudo systemctl restart sshd
     fi
     
-    if [ $? -eq 0 ]; então
+    if [ $? -eq 0 ]; then
         echo "Servico SSH reiniciado com sucesso." | tee -a $LOG_FILE
     else
         echo "Erro ao reiniciar o servico SSH." | tee -a $LOG_FILE
@@ -271,7 +271,7 @@ restart_ssh() {
 # Funcao para reiniciar o servidor
 reboot_server() {
     read -p "Tem certeza que deseja reiniciar o servidor? (s/n): " confirm
-    if [[ $confirm =~ ^[Ss]$ ]]; então
+    if [[ $confirm =~ ^[Ss]$ ]]; then
         read -p "Pressione Enter novamente para confirmar o reinicio do servidor..."
         sudo reboot
     else
