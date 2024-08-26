@@ -81,6 +81,15 @@ check_for_updates() {
     fi
 }
 
+# Funcao para forcar a atualizacao do DSAS
+force_update() {
+    echo "Forcando atualizacao do DSAS..."
+    curl -o "$SCRIPT_PATH" "$GITHUB_REPO_RAW/$SCRIPT_NAME"
+    chmod +x "$SCRIPT_PATH"
+    echo "Atualizacao concluida. Reiniciando o script..."
+    exec "$SCRIPT_PATH"
+}
+
 # Funcao para instalar ClamAV
 install_clamav() {
     echo "Verificando instalacao do ClamAV..." | tee -a $LOG_FILE
@@ -173,82 +182,20 @@ remove_2fa() {
 
 # Funcao para corrigir CVEs
 fix_cve_menu() {
-    while true; do
-        clear
-        echo "============================================"
-        echo " Correcao de CVEs"
-        echo "============================================"
-        echo "1) Corrigir CVE-2024-6387 e CVE-2024-6409"
-        echo "2) Voltar ao Menu Principal"
-        echo "============================================"
-        read -p "Escolha uma opcao: " cve_option
+    clear
+    echo "============================================"
+    echo " Correcao de CVEs"
+    echo "============================================"
+    echo "Em breve disponibilizaremos diversas correcoes de CVE no nosso sistema."
+    echo "============================================"
+    echo "1) Voltar ao Menu Principal"
+    echo "============================================"
+    read -p "Escolha uma opcao: " cve_option
 
-        case $cve_option in
-            1) fix_cves ;;
-            2) return ;;
-            *) echo "Opcao invalida. Tente novamente." ;;
-        esac
-    done
-}
-
-# Funcao para verificar e corrigir o arquivo sshd.service
-fix_sshd_service_file() {
-    if [ -f /etc/systemd/system/sshd.service ]; then
-        SSHD_SERVICE_PATH="/etc/systemd/system/sshd.service"
-    elif [ -f /lib/systemd/system/ssh.service ]; then
-        SSHD_SERVICE_PATH="/lib/systemd/system/ssh.service"
-    else
-        echo "Arquivo ssh.service ou sshd.service nao encontrado." | tee -a $LOG_FILE
-        return 1
-    fi
-
-    sudo sed -i 's|^ExecStart=.*|ExecStart=/usr/local/sbin/sshd -D -f /etc/ssh/sshd_config|' "$SSHD_SERVICE_PATH"
-    sudo systemctl daemon-reload
-}
-
-# Funcao para corrigir CVEs especificas
-fix_cves() {
-    echo "Corrigindo CVEs CVE-2024-6387 e CVE-2024-6409..."
-    echo "Esta operacao pode demorar um pouco. Por favor, aguarde."
-
-    # Passo 1: Baixar e preparar a compilacao
-    sudo apt update
-    sudo apt install build-essential zlib1g-dev libssl-dev libpam0g-dev libselinux1-dev wget -y
-
-    cd /usr/local/src
-    sudo wget https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.8p1.tar.gz
-    sudo tar -xzf openssh-9.8p1.tar.gz
-    cd openssh-9.8p1
-
-    # Perguntar ao usuario se ele possui 2FA configurado
-    read -p "Voce usa 2FA no SSH (s/n)? " use_2fa
-
-    if [[ $use_2fa =~ ^[Ss]$ ]]; then
-        sudo ./configure --with-pam
-    else
-        sudo ./configure
-    fi
-
-    sudo make
-    sudo make install
-
-    # Passo 3: Verificar a versao atualizada
-    /usr/local/bin/ssh -V
-
-    # Passo 4: Atualizar o PATH
-    export PATH=/usr/local/bin:$PATH
-    echo 'export PATH=/usr/local/bin:$PATH' >> ~/.bashrc
-    source ~/.bashrc
-
-    # Corrigir o arquivo sshd.service se necessario
-    fix_sshd_service_file
-
-    # Reiniciar o daemon e o servico SSH
-    sudo systemctl restart sshd
-    sudo systemctl status sshd
-
-    echo "Correcao de CVEs concluida com sucesso." | tee -a $LOG_FILE
-    read -p "Pressione Enter para voltar ao menu..."
+    case $cve_option in
+        1) return ;;
+        *) echo "Opcao invalida. Tente novamente." ;;
+    esac
 }
 
 # Funcao para alterar o hostname do servidor
@@ -262,6 +209,51 @@ change_hostname() {
     sudo sed -i "s/$(hostname)/$new_hostname/g" /etc/hosts
 
     echo "Hostname alterado com sucesso para $new_hostname." | tee -a $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para alterar servidores DNS
+change_dns() {
+    while true; do
+        clear
+        echo "============================================"
+        echo " Alterar Servidores DNS"
+        echo "============================================"
+        echo "1) DNS IPv4"
+        echo "2) DNS IPv6"
+        echo "3) Voltar ao Menu Principal"
+        echo "============================================"
+        read -p "Escolha uma opcao: " dns_option
+
+        case $dns_option in
+            1) configure_dns "IPv4" ;;
+            2) configure_dns "IPv6" ;;
+            3) return ;;
+            *) echo "Opcao invalida. Tente novamente." ;;
+        esac
+    done
+}
+
+# Funcao para configurar servidores DNS
+configure_dns() {
+    local dns_type=$1
+    local dns_file
+
+    if [ "$dns_type" = "IPv4" ]; then
+        dns_file="/etc/resolv.conf"
+    else
+        dns_file="/etc/resolv.conf"
+    fi
+
+    echo "Configurando servidores DNS $dns_type..."
+    for i in {1..3}; do
+        read -p "Digite o endereco DNS $dns_type ($i): " dns_address
+        if [ -n "$dns_address" ]; then
+            echo "nameserver $dns_address" | sudo tee -a $dns_file
+        fi
+    done
+
+    echo "Servidores DNS $dns_type configurados com sucesso." | tee -a $LOG_FILE
     read -p "Pressione Enter para voltar ao menu..."
 }
 
@@ -380,6 +372,86 @@ clear_logs() {
     read -p "Pressione Enter para voltar ao menu..."
 }
 
+# Menu de gerenciamento do SSH
+ssh_management_menu() {
+    while true; do
+        clear
+        echo "============================================"
+        echo " Gerenciamento do SSH"
+        echo "============================================"
+        echo "1) Alterar porta SSH"
+        echo "2) Configurar 2FA no SSH"
+        echo "3) Remover 2FA no SSH"
+        echo "4) Reiniciar SSH"
+        echo "5) Voltar ao Menu Principal"
+        echo "============================================"
+        read -p "Escolha uma opcao: " ssh_option
+
+        case $ssh_option in
+            1) change_ssh_port ;;
+            2) setup_2fa ;;
+            3) remove_2fa ;;
+            4) restart_ssh ;;
+            5) return ;;
+            *) echo "Opcao invalida. Tente novamente." ;;
+        esac
+    done
+}
+
+# Menu de gerenciamento do firewall
+firewall_management_menu() {
+    while true; do
+        clear
+        echo "============================================"
+        echo " Gerenciamento de Firewall"
+        echo "============================================"
+        echo "1) Bloqueio de Portas do Servidor"
+        echo "2) Desbloqueio de Porta no Servidor"
+        echo "3) Bloqueio de IP"
+        echo "4) Desbloqueio de IP"
+        echo "5) Liberar Porta para um IP Especifico"
+        echo "6) Remover Liberacao de Porta para um IP Especifico"
+        echo "7) Limpar Todas as Regras Criadas"
+        echo "8) Voltar ao Menu Principal"
+        echo "============================================"
+        read -p "Escolha uma opcao: " firewall_option
+
+        case $firewall_option in
+            1) block_port ;;
+            2) unblock_port ;;
+            3) block_ip ;;
+            4) unblock_ip ;;
+            5) allow_ip_port ;;
+            6) remove_allow_ip_port ;;
+            7) clear_all_rules ;;
+            8) return ;;
+            *) echo "Opcao invalida. Tente novamente." ;;
+        esac
+    done
+}
+
+# Menu de gerenciamento do antivirus
+antivirus_management_menu() {
+    while true; do
+        clear
+        echo "============================================"
+        echo " Gerenciamento de Antivirus"
+        echo "============================================"
+        echo "1) Fazer Verificacao Completa do Antivirus"
+        echo "2) Verificacao Personalizada do Antivirus"
+        echo "3) Voltar ao Menu Principal"
+        echo "============================================"
+        read -p "Escolha uma opcao: " antivirus_option
+
+        case $antivirus_option in
+            1) full_scan ;;
+            2) custom_scan ;;
+            3) return ;;
+            *) echo "Opcao invalida. Tente novamente." ;;
+        esac
+    done
+}
+
 # Menu principal
 main_menu() {
     while true; do
@@ -387,48 +459,32 @@ main_menu() {
         echo "============================================"
         echo " $SYSTEM_NAME - Versao $VERSION"
         echo "============================================"
-        echo "1) Alterar porta SSH"
-        echo "2) Configurar 2FA no SSH"
-        echo "3) Remover 2FA no SSH"
-        echo "4) Corrigir CVEs"
-        echo "5) Alterar Hostname do Servidor"
-        echo "6) Reiniciar SSH"
-        echo "7) Bloqueio de Portas do Servidor"
-        echo "8) Desbloqueio de Porta no Servidor"
-        echo "9) Bloqueio de IP"
-        echo "10) Desbloqueio de IP"
-        echo "11) Liberar Porta para um IP Especifico"
-        echo "12) Remover Liberacao de Porta para um IP Especifico"
-        echo "13) Limpar Todas as Regras Criadas"
-        echo "14) Fazer Verificacao Completa do Antivirus"
-        echo "15) Verificacao Personalizada do Antivirus"
-        echo "16) Reiniciar Servidor"
-        echo "17) Ver Logs"
-        echo "18) Limpar Logs"
-        echo "19) Sair"
+        echo "1) Gerenciamento do SSH"
+        echo "2) Corrigir CVEs"
+        echo "3) Alterar Hostname do Servidor"
+        echo "4) Alterar Servidores DNS"
+        echo "5) Gerenciamento de Firewall"
+        echo "6) Gerenciamento de Antivirus"
+        echo "7) Reiniciar Servidor"
+        echo "8) Ver Logs"
+        echo "9) Limpar Logs"
+        echo "10) Forcar Atualizacao do DSAS"
+        echo "11) Sair"
         echo "============================================"
         read -p "Escolha uma opcao: " option
 
         case $option in
-            1) change_ssh_port ;;
-            2) setup_2fa ;;
-            3) remove_2fa ;;
-            4) fix_cve_menu ;;
-            5) change_hostname ;;
-            6) restart_ssh ;;
-            7) block_port ;;
-            8) unblock_port ;;
-            9) block_ip ;;
-            10) unblock_ip ;;
-            11) allow_ip_port ;;
-            12) remove_allow_ip_port ;;
-            13) clear_all_rules ;;
-            14) full_scan ;;
-            15) custom_scan ;;
-            16) reboot_server ;;
-            17) view_logs ;;
-            18) clear_logs ;;
-            19) 
+            1) ssh_management_menu ;;
+            2) fix_cve_menu ;;
+            3) change_hostname ;;
+            4) change_dns ;;
+            5) firewall_management_menu ;;
+            6) antivirus_management_menu ;;
+            7) reboot_server ;;
+            8) view_logs ;;
+            9) clear_logs ;;
+            10) force_update ;;
+            11) 
                 echo "Voce acabou de sair do $SYSTEM_NAME"
                 echo "Caso precise de suporte e ajuda acesse nosso site https://dolutech.com"
                 exit 0
