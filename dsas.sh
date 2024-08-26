@@ -4,7 +4,13 @@
 SYSTEM_NAME="Dolutech Security Automate System (DSAS)"
 VERSION="0.0.1"
 DSAS_DIR="/opt/DSAS"
-LOG_FILE="$DSAS_DIR/dsas.log"
+LOG_DIR="$DSAS_DIR/logs"
+VERSION_DIR="$DSAS_DIR/version"
+LOG_FILE="$LOG_DIR/dsas.log"
+VERSION_FILE="$VERSION_DIR/version.txt"
+SCRIPT_NAME="dsas.sh"
+SCRIPT_PATH="$DSAS_DIR/$SCRIPT_NAME"
+GITHUB_REPO="https://github.com/dolutech/Dolutech-Security-Automate-System/blob/main"
 
 # Funcao para detectar a distribuicao
 detect_distro() {
@@ -20,13 +26,59 @@ detect_distro() {
 
 # Funcao para garantir que o script pode ser executado de qualquer lugar
 setup_path() {
-    ln -sf $(realpath $0) /usr/local/bin/dsas
+    ln -sf $SCRIPT_PATH /usr/local/bin/dsas
 }
 
-# Funcao para criar o diretorio e arquivo de log
+# Funcao para criar o diretorio do sistema e os arquivos necessarios
 setup_environment() {
-    mkdir -p $DSAS_DIR
-    touch $LOG_FILE
+    if [ ! -d "$DSAS_DIR" ]; then
+        mkdir -p $DSAS_DIR
+    fi
+
+    if [ ! -d "$LOG_DIR" ]; then
+        mkdir -p $LOG_DIR
+    fi
+
+    if [ ! -d "$VERSION_DIR" ]; then
+        mkdir -p $VERSION_DIR
+    fi
+
+    if [ ! -f "$LOG_FILE" ]; then
+        touch $LOG_FILE
+    fi
+
+    if [ ! -f "$SCRIPT_PATH" ]; then
+        mv "$0" "$SCRIPT_PATH"
+    fi
+
+    if [ ! -f "$VERSION_FILE" ]; then
+        curl -o "$VERSION_FILE" "$GITHUB_REPO/version.txt"
+    fi
+}
+
+# Funcao para verificar e baixar a versao mais recente do script
+check_for_updates() {
+    local new_version_file="/tmp/version.txt"
+    curl -o "$new_version_file" "$GITHUB_REPO/version.txt"
+
+    if ! diff "$VERSION_FILE" "$new_version_file" > /dev/null; then
+        echo "Foi encontrada uma nova versao do Dolutech Security Automate System. Iremos efetuar a atualizacao."
+        read -p "Pressione Enter para atualizar..."
+
+        # Baixar o novo script
+        curl -o "$SCRIPT_PATH" "$GITHUB_REPO/$SCRIPT_NAME"
+
+        # Dar permissao de execucao ao novo script
+        chmod +x "$SCRIPT_PATH"
+
+        # Substituir o arquivo version.txt
+        mv "$new_version_file" "$VERSION_FILE"
+
+        # Reiniciar o script
+        exec "$SCRIPT_PATH"
+    else
+        rm "$new_version_file"
+    fi
 }
 
 # Funcao para instalar ClamAV
@@ -76,11 +128,18 @@ setup_2fa() {
         echo "Configuracao do 2FA ja estava presente no arquivo /etc/pam.d/sshd." | tee -a $LOG_FILE
     fi
 
-    # Adicionando ou substituindo a linha ChallengeResponseAuthentication
-    if grep -q "^ChallengeResponseAuthentication" /etc/ssh/sshd_config; then
+    # Adicionando ou substituindo a linha ChallengeResponseAuthentication no sshd_config
+    if grep -q "^# Change to yes to enable challenge-response passwords" /etc/ssh/sshd_config; then
+        sudo sed -i "/^# Change to yes to enable challenge-response passwords/a ChallengeResponseAuthentication yes" /etc/ssh/sshd_config
+    elif grep -q "^ChallengeResponseAuthentication" /etc/ssh/sshd_config; then
         sudo sed -i "s/^ChallengeResponseAuthentication.*/ChallengeResponseAuthentication yes/" /etc/ssh/sshd_config
     else
         echo "ChallengeResponseAuthentication yes" | sudo tee -a /etc/ssh/sshd_config
+    fi
+
+    # Comentando a linha KbdInteractiveAuthentication
+    if grep -q "^KbdInteractiveAuthentication" /etc/ssh/sshd_config; then
+        sudo sed -i "s/^KbdInteractiveAuthentication.*/#&/" /etc/ssh/sshd_config
     fi
 
     restart_ssh
@@ -244,6 +303,7 @@ main_menu() {
 # Executando as funcoes de inicializacao
 detect_distro
 setup_environment
+check_for_updates
 install_clamav
 setup_path
 
