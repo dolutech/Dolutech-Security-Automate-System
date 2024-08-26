@@ -1,0 +1,251 @@
+#!/bin/bash
+
+# Nome e versao do sistema
+SYSTEM_NAME="Dolutech Security Automate System (DSAS)"
+VERSION="0.0.1"
+DSAS_DIR="/opt/DSAS"
+LOG_FILE="$DSAS_DIR/dsas.log"
+
+# Funcao para detectar a distribuicao
+detect_distro() {
+    if [ -f /etc/debian_version ]; then
+        DISTRO="debian"
+    elif [ -f /etc/redhat-release ]; then
+        DISTRO="rhel"
+    else
+        echo "Sistema operacional nao suportado." | tee -a $LOG_FILE
+        exit 1
+    fi
+}
+
+# Funcao para garantir que o script pode ser executado de qualquer lugar
+setup_path() {
+    ln -sf $(realpath $0) /usr/local/bin/dsas
+}
+
+# Funcao para criar o diretorio e arquivo de log
+setup_environment() {
+    mkdir -p $DSAS_DIR
+    touch $LOG_FILE
+}
+
+# Funcao para instalar ClamAV
+install_clamav() {
+    echo "Verificando instalacao do ClamAV..." | tee -a $LOG_FILE
+    if ! command -v clamscan &> /dev/null; then
+        echo "ClamAV nao encontrado, instalando..." | tee -a $LOG_FILE
+        if [ "$DISTRO" = "debian" ]; then
+            sudo apt-get update && sudo apt-get install -y clamav clamav-daemon
+        elif [ "$DISTRO" = "rhel" ]; then
+            sudo yum install -y epel-release && sudo yum install -y clamav clamav-update
+        fi
+    else
+        echo "ClamAV ja esta instalado." | tee -a $LOG_FILE
+    fi
+}
+
+# Funcao para alterar a porta SSH
+change_ssh_port() {
+    read -p "Digite a nova porta SSH: " new_port
+
+    # Substituindo a linha Port independentemente do valor atual
+    if grep -q "^#Port" /etc/ssh/sshd_config; then
+        sudo sed -i "s/^#Port.*/Port $new_port/" /etc/ssh/sshd_config
+    elif grep -q "^Port" /etc/ssh/sshd_config; then
+        sudo sed -i "s/^Port.*/Port $new_port/" /etc/ssh/sshd_config
+    else
+        echo "Port $new_port" | sudo tee -a /etc/ssh/sshd_config
+    fi
+
+    restart_ssh
+    echo "Porta SSH alterada com sucesso para $new_port." | tee -a $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para configurar 2FA no SSH
+setup_2fa() {
+    sudo apt-get install -y libpam-google-authenticator
+    echo "Iniciando a configuracao do 2FA..."
+    sudo google-authenticator
+
+    # Verifica se a linha do 2FA ja existe no arquivo pam.d/sshd
+    if ! grep -q "auth required pam_google_authenticator.so" /etc/pam.d/sshd; then
+        sudo sed -i '/@include common-auth/a auth required pam_google_authenticator.so' /etc/pam.d/sshd
+        echo "Configuracao do 2FA adicionada no arquivo /etc/pam.d/sshd." | tee -a $LOG_FILE
+    else
+        echo "Configuracao do 2FA ja estava presente no arquivo /etc/pam.d/sshd." | tee -a $LOG_FILE
+    fi
+
+    # Adicionando ou substituindo a linha ChallengeResponseAuthentication
+    if grep -q "^ChallengeResponseAuthentication" /etc/ssh/sshd_config; then
+        sudo sed -i "s/^ChallengeResponseAuthentication.*/ChallengeResponseAuthentication yes/" /etc/ssh/sshd_config
+    else
+        echo "ChallengeResponseAuthentication yes" | sudo tee -a /etc/ssh/sshd_config
+    fi
+
+    restart_ssh
+    echo "Configuracao do 2FA concluida com sucesso." | tee -a $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para reiniciar o SSH
+restart_ssh() {
+    if [ "$DISTRO" = "debian" ]; then
+        sudo systemctl restart ssh
+    elif [ "$DISTRO" = "rhel" ]; then
+        sudo systemctl restart sshd
+    fi
+    
+    if [ $? -eq 0 ]; then
+        echo "Servico SSH reiniciado com sucesso." | tee -a $LOG_FILE
+    else
+        echo "Erro ao reiniciar o servico SSH." | tee -a $LOG_FILE
+    fi
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para bloquear porta no servidor
+block_port() {
+    read -p "Digite a porta que deseja bloquear: " port
+    sudo iptables -A INPUT -p tcp --dport $port -j DROP
+    echo "Porta $port bloqueada com sucesso." | tee -a $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para desbloquear porta no servidor
+unblock_port() {
+    sudo iptables -L INPUT -v -n --line-numbers | grep DROP
+    read -p "Digite o numero da linha que deseja desbloquear: " line
+    sudo iptables -D INPUT $line
+    echo "Porta desbloqueada com sucesso." | tee -a $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para bloquear IP
+block_ip() {
+    read -p "Digite o IP que deseja bloquear: " ip
+    sudo iptables -A INPUT -s $ip -j DROP
+    echo "IP $ip bloqueado com sucesso." | tee -a $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para desbloquear IP
+unblock_ip() {
+    sudo iptables -L INPUT -v -n --line-numbers | grep DROP
+    read -p "Digite o numero da linha que deseja desbloquear: " line
+    sudo iptables -D INPUT $line
+    echo "IP desbloqueado com sucesso." | tee -a $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para liberar porta para IP especifico
+allow_ip_port() {
+    read -p "Digite o IP que deseja liberar: " ip
+    read -p "Digite a porta que deseja liberar: " port
+    sudo iptables -A INPUT -p tcp -s $ip --dport $port -j ACCEPT
+    echo "Porta $port liberada para o IP $ip." | tee -a $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para remover liberacao de porta para IP especifico
+remove_allow_ip_port() {
+    sudo iptables -L INPUT -v -n --line-numbers | grep ACCEPT
+    read -p "Digite o numero da linha que deseja remover: " line
+    sudo iptables -D INPUT $line
+    echo "Liberacao de porta removida com sucesso." | tee -a $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para limpar todas as regras do IPTables
+clear_all_rules() {
+    sudo iptables -F
+    echo "Todas as regras do IPTables foram limpas." | tee -a $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para fazer verificacao completa do antivirus
+full_scan() {
+    sudo clamscan -r /
+    echo "Verificacao completa do sistema realizada." | tee -a $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para fazer verificacao personalizada do antivirus
+custom_scan() {
+    read -p "Digite o caminho que deseja verificar: " path
+    sudo clamscan -r $path
+    echo "Verificacao personalizada do caminho $path realizada." | tee -a $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para ver os logs
+view_logs() {
+    cat $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para limpar os logs
+clear_logs() {
+    > $LOG_FILE
+    echo "Logs limpos com sucesso." | tee -a $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Menu principal
+main_menu() {
+    while true; do
+        clear
+        echo "============================================"
+        echo " $SYSTEM_NAME - Versao $VERSION"
+        echo "============================================"
+        echo "1) Alterar porta SSH"
+        echo "2) Configurar 2FA no SSH"
+        echo "3) Bloqueio de Portas do Servidor"
+        echo "4) Desbloqueio de Porta no Servidor"
+        echo "5) Bloqueio de IP"
+        echo "6) Desbloqueio de IP"
+        echo "7) Liberar Porta para um IP Especifico"
+        echo "8) Remover Liberacao de Porta para um IP Especifico"
+        echo "9) Limpar Todas as Regras Criadas"
+        echo "10) Fazer Verificacao Completa do Antivirus"
+        echo "11) Verificacao Personalizada do Antivirus"
+        echo "12) Reiniciar SSH"
+        echo "13) Ver Logs"
+        echo "14) Limpar Logs"
+        echo "15) Sair"
+        echo "============================================"
+        read -p "Escolha uma opcao: " option
+
+        case $option in
+            1) change_ssh_port ;;
+            2) setup_2fa ;;
+            3) block_port ;;
+            4) unblock_port ;;
+            5) block_ip ;;
+            6) unblock_ip ;;
+            7) allow_ip_port ;;
+            8) remove_allow_ip_port ;;
+            9) clear_all_rules ;;
+            10) full_scan ;;
+            11) custom_scan ;;
+            12) restart_ssh ;;
+            13) view_logs ;;
+            14) clear_logs ;;
+            15) 
+                echo "Voce acabou de sair do $SYSTEM_NAME"
+                echo "Caso precise de suporte e ajuda acesse nosso site https://dolutech.com"
+                exit 0
+                ;;
+            *) echo "Opcao invalida. Tente novamente." ;;
+        esac
+    done
+}
+
+# Executando as funcoes de inicializacao
+detect_distro
+setup_environment
+install_clamav
+setup_path
+
+# Iniciando o menu principal
+main_menu
