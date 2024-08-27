@@ -98,7 +98,7 @@ Contribuições são bem-vindas! Sinta-se à vontade para abrir issues ou enviar
 
 ## Licença
 
-Este projeto está licenciado sob a Licença MIT.
+Este projeto está licenciado sob a Licença GPL.
 
 ## Créditos
 - Lucas Catão de Moraes: - https://cataodemoraes.com
