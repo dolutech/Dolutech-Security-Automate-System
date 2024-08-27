@@ -31,27 +31,27 @@ setup_path() {
 
 # Funcao para criar o diretorio do sistema e os arquivos necessarios
 setup_environment() {
-    if [ ! -d "$DSAS_DIR" ]; then
+    if [ ! -d "$DSAS_DIR" ]; então
         mkdir -p $DSAS_DIR
     fi
 
-    if [ ! -d "$LOG_DIR" ]; then
+    if [ ! -d "$LOG_DIR" ]; então
         mkdir -p $LOG_DIR
     fi
 
-    if [ ! -d "$VERSION_DIR" ]; then
+    if [ ! -d "$VERSION_DIR" ]; então
         mkdir -p $VERSION_DIR
     fi
 
-    if [ ! -f "$LOG_FILE" ]; then
+    if [ ! -f "$LOG_FILE" ]; então
         touch $LOG_FILE
     fi
 
-    if [ ! -f "$SCRIPT_PATH" ]; then
+    if [ ! -f "$SCRIPT_PATH" ]; então
         mv "$0" "$SCRIPT_PATH"
     fi
 
-    if [ ! -f "$VERSION_FILE" ]; then
+    if [ ! -f "$VERSION_FILE" ]; então
         curl -o "$VERSION_FILE" "$GITHUB_REPO_RAW/version.txt"
     fi
 }
@@ -61,7 +61,7 @@ check_for_updates() {
     local new_version_file="/tmp/version.txt"
     curl -o "$new_version_file" "$GITHUB_REPO_RAW/version.txt"
 
-    if ! diff "$VERSION_FILE" "$new_version_file" > /dev/null; then
+    if ! diff "$VERSION_FILE" "$new_version_file" > /dev/null; então
         echo "Foi encontrada uma nova versao do Dolutech Security Automate System. Iremos efetuar a atualizacao."
         read -p "Pressione Enter para atualizar..."
 
@@ -93,11 +93,11 @@ force_update() {
 # Funcao para instalar ClamAV
 install_clamav() {
     echo "Verificando instalacao do ClamAV..." | tee -a $LOG_FILE
-    if ! command -v clamscan &> /dev/null; then
+    if ! command -v clamscan &> /dev/null; então
         echo "ClamAV nao encontrado, instalando..." | tee -a $LOG_FILE
-        if [ "$DISTRO" = "debian" ]; then
+        if [ "$DISTRO" = "debian" ]; então
             sudo apt-get update && sudo apt-get install -y clamav clamav-daemon
-        elif [ "$DISTRO" = "rhel" ]; then
+        elif [ "$DISTRO" = "rhel" ]; então
             sudo yum install -y epel-release && sudo yum install -y clamav clamav-update
         fi
     else
@@ -110,9 +110,9 @@ change_ssh_port() {
     read -p "Digite a nova porta SSH: " new_port
 
     # Substituindo a linha Port independentemente do valor atual
-    if grep -q "^#Port" /etc/ssh/sshd_config; then
+    if grep -q "^#Port" /etc/ssh/sshd_config; então
         sudo sed -i "s/^#Port.*/Port $new_port/" /etc/ssh/sshd_config
-    elif grep -q "^Port" /etc/ssh/sshd_config; then
+    elif grep -q "^Port" /etc/ssh/sshd_config; então
         sudo sed -i "s/^Port.*/Port $new_port/" /etc/ssh/sshd_config
     else
         echo "Port $new_port" | sudo tee -a /etc/ssh/sshd_config
@@ -130,7 +130,7 @@ setup_2fa() {
     sudo google-authenticator
 
     # Verifica se a linha do 2FA ja existe no arquivo pam.d/sshd
-    if ! grep -q "auth required pam_google_authenticator.so" /etc/pam.d/sshd; then
+    if ! grep -q "auth required pam_google_authenticator.so" /etc/pam.d/sshd; então
         sudo sed -i '/@include common-auth/a auth required pam_google_authenticator.so' /etc/pam.d/sshd
         echo "Configuracao do 2FA adicionada no arquivo /etc/pam.d/sshd." | tee -a $LOG_FILE
     else
@@ -138,16 +138,16 @@ setup_2fa() {
     fi
 
     # Adicionando ou substituindo a linha ChallengeResponseAuthentication no sshd_config
-    if grep -q "^# Change to yes to enable challenge-response passwords" /etc/ssh/sshd_config; then
+    if grep -q "^# Change to yes to enable challenge-response passwords" /etc/ssh/sshd_config; então
         sudo sed -i "/^# Change to yes to enable challenge-response passwords/a ChallengeResponseAuthentication yes" /etc/ssh/sshd_config
-    elif grep -q "^ChallengeResponseAuthentication" /etc/ssh/sshd_config; then
+    elif grep -q "^ChallengeResponseAuthentication" /etc/ssh/sshd_config; então
         sudo sed -i "s/^ChallengeResponseAuthentication.*/ChallengeResponseAuthentication yes/" /etc/ssh/sshd_config
     else
         echo "ChallengeResponseAuthentication yes" | sudo tee -a /etc/ssh/sshd_config
     fi
 
     # Comentando a linha KbdInteractiveAuthentication
-    if grep -q "^KbdInteractiveAuthentication" /etc/ssh/sshd_config; then
+    if grep -q "^KbdInteractiveAuthentication" /etc/ssh/sshd_config; então
         sudo sed -i "s/^KbdInteractiveAuthentication.*/#&/" /etc/ssh/sshd_config
     fi
 
@@ -164,14 +164,14 @@ remove_2fa() {
     sudo sed -i '/auth required pam_google_authenticator.so/d' /etc/pam.d/sshd
 
     # Revertendo a linha ChallengeResponseAuthentication para no
-    if grep -q "^ChallengeResponseAuthentication yes" /etc/ssh/sshd_config; then
+    if grep -q "^ChallengeResponseAuthentication yes" /etc/ssh/sshd_config; então
         sudo sed -i "s/^ChallengeResponseAuthentication yes/ChallengeResponseAuthentication no/" /etc/ssh/sshd_config
     fi
 
     # Desinstalando o google-authenticator
-    if [ "$DISTRO" = "debian" ]; then
+    if [ "$DISTRO" = "debian" ]; então
         sudo apt-get remove --purge -y libpam-google-authenticator
-    elif [ "$DISTRO" = "rhel" ]; then
+    elif [ "$DISTRO" = "rhel" ]; então
         sudo yum remove -y google-authenticator
     fi
 
@@ -239,7 +239,7 @@ configure_dns() {
     local dns_type=$1
     local dns_file
 
-    if [ "$dns_type" = "IPv4" ]; then
+    if [ "$dns_type" = "IPv4" ]; então
         dns_file="/etc/resolv.conf"
     else
         dns_file="/etc/resolv.conf"
@@ -248,7 +248,7 @@ configure_dns() {
     echo "Configurando servidores DNS $dns_type..."
     for i in {1..3}; do
         read -p "Digite o endereco DNS $dns_type ($i): " dns_address
-        if [ -n "$dns_address" ]; then
+        if [ -n "$dns_address" ]; então
             echo "nameserver $dns_address" | sudo tee -a $dns_file
         fi
     done
@@ -257,15 +257,72 @@ configure_dns() {
     read -p "Pressione Enter para voltar ao menu..."
 }
 
+# Funcao para agendar rotina de automacao
+schedule_automation() {
+    read -p "Digite o comando da rotina de automacao que deseja agendar: " automation_command
+
+    echo "Com que frequencia deseja executar esta rotina?"
+    echo "1) A cada X minutos"
+    echo "2) A cada X horas"
+    echo "3) A cada X dias"
+    read -p "Escolha uma opcao: " schedule_option
+
+    case $schedule_option in
+        1) 
+            read -p "Digite o intervalo em minutos: " interval
+            cron_time="*/$interval * * * *"
+            ;;
+        2) 
+            read -p "Digite o intervalo em horas: " interval
+            cron_time="0 */$interval * * *"
+            ;;
+        3) 
+            read -p "Digite o intervalo em dias: " interval
+            cron_time="0 0 */$interval * *"
+            ;;
+        *) 
+            echo "Opcao invalida. Retornando ao menu principal."
+            return
+            ;;
+    esac
+
+    # Adiciona a rotina ao crontab
+    (crontab -l 2>/dev/null; echo "$cron_time $automation_command") | crontab -
+    echo "Rotina de automacao agendada com sucesso." | tee -a $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para verificar e gerenciar agendamentos de automacao
+view_automation_schedule() {
+    crontab -l > /tmp/current_cron
+    if [ ! -s /tmp/current_cron ]; então
+        echo "Nao ha agendamentos de automacao no momento." | tee -a $LOG_FILE
+    else
+        echo "Agendamentos de automacao atuais:"
+        nl -s ") " /tmp/current_cron
+        read -p "Deseja remover algum agendamento (s/n)? " remove_option
+
+        if [[ $remove_option =~ ^[Ss]$ ]]; então
+            read -p "Digite o numero do agendamento que deseja remover: " line_number
+            sed -i "${line_number}d" /tmp/current_cron
+            crontab /tmp/current_cron
+            echo "Agendamento removido com sucesso." | tee -a $LOG_FILE
+        else
+            echo "Nenhum agendamento foi removido." | tee -a $LOG_FILE
+        fi
+    fi
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
 # Funcao para reiniciar o SSH
 restart_ssh() {
-    if [ "$DISTRO" = "debian" ]; then
+    if [ "$DISTRO" = "debian" ]; então
         sudo systemctl restart ssh
-    elif [ "$DISTRO" = "rhel" ]; then
+    elif [ "$DISTRO" = "rhel" ]; então
         sudo systemctl restart sshd
     fi
     
-    if [ $? -eq 0 ]; then
+    if [ $? -eq 0 ]; então
         echo "Servico SSH reiniciado com sucesso." | tee -a $LOG_FILE
     else
         echo "Erro ao reiniciar o servico SSH." | tee -a $LOG_FILE
@@ -276,7 +333,7 @@ restart_ssh() {
 # Funcao para reiniciar o servidor
 reboot_server() {
     read -p "Tem certeza que deseja reiniciar o servidor? (s/n): " confirm
-    if [[ $confirm =~ ^[Ss]$ ]]; then
+    if [[ $confirm =~ ^[Ss]$ ]]; então
         read -p "Pressione Enter novamente para confirmar o reinicio do servidor..."
         sudo reboot
     else
@@ -452,6 +509,28 @@ antivirus_management_menu() {
     done
 }
 
+# Menu de gerenciamento de automacao de sistema
+automation_management_menu() {
+    while true; do
+        clear
+        echo "============================================"
+        echo " Gerir Automacao de Sistema"
+        echo "============================================"
+        echo "1) Agendar Rotina de Automacao"
+        echo "2) Verificar Agendamentos Automatizados"
+        echo "3) Voltar ao Menu Principal"
+        echo "============================================"
+        read -p "Escolha uma opcao: " automation_option
+
+        case $automation_option in
+            1) schedule_automation ;;
+            2) view_automation_schedule ;;
+            3) return ;;
+            *) echo "Opcao invalida. Tente novamente." ;;
+        esac
+    done
+}
+
 # Menu principal
 main_menu() {
     while true; do
@@ -463,13 +542,14 @@ main_menu() {
         echo "2) Corrigir CVEs"
         echo "3) Alterar Hostname do Servidor"
         echo "4) Alterar Servidores DNS"
-        echo "5) Gerenciamento de Firewall"
-        echo "6) Gerenciamento de Antivirus"
-        echo "7) Reiniciar Servidor"
-        echo "8) Ver Logs"
-        echo "9) Limpar Logs"
-        echo "10) Forcar Atualizacao do DSAS"
-        echo "11) Sair"
+        echo "5) Gerir Automacao de Sistema"
+        echo "6) Gerenciamento de Firewall"
+        echo "7) Gerenciamento de Antivirus"
+        echo "8) Reiniciar Servidor"
+        echo "9) Ver Logs"
+        echo "10) Limpar Logs"
+        echo "11) Forcar Atualizacao do DSAS"
+        echo "12) Sair"
         echo "============================================"
         read -p "Escolha uma opcao: " option
 
@@ -478,13 +558,14 @@ main_menu() {
             2) fix_cve_menu ;;
             3) change_hostname ;;
             4) change_dns ;;
-            5) firewall_management_menu ;;
-            6) antivirus_management_menu ;;
-            7) reboot_server ;;
-            8) view_logs ;;
-            9) clear_logs ;;
-            10) force_update ;;
-            11) 
+            5) automation_management_menu ;;
+            6) firewall_management_menu ;;
+            7) antivirus_management_menu ;;
+            8) reboot_server ;;
+            9) view_logs ;;
+            10) clear_logs ;;
+            11) force_update ;;
+            12) 
                 echo "Voce acabou de sair do $SYSTEM_NAME"
                 echo "Caso precise de suporte e ajuda acesse nosso site https://dolutech.com"
                 exit 0
