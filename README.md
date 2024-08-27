@@ -86,6 +86,18 @@ dsas start
 ## Atualizações Automáticas
 O DSAS verifica automaticamente se há uma nova versão disponível toda vez que é iniciado. Se uma nova versão for encontrada, o sistema solicitará a atualização antes de continuar. Isso garante que você esteja sempre utilizando a versão mais segura e atualizada.
 
+## Manutenção
+
+Para garantir que as funcionalidades funcionem corretamente, o script atualiza e configura automaticamente. Recomenda-se verificar os logs periodicamente para garantir que tudo está funcionando conforme o esperado.
+
+## Contribuição
+
+Contribuições são bem-vindas! Sinta-se à vontade para abrir issues ou enviar pull requests no repositório do GitHub.
+
+## Licença
+
+Este projeto está licenciado sob a Licença MIT.
+
 ## Créditos
 - Lucas Catão de Moraes: - https://cataodemoraes.com
 - Dolutech: - https://dolutech.com
