@@ -87,7 +87,7 @@ dsas start
 O DSAS verifica automaticamente se há uma nova versão disponível toda vez que é iniciado. Se uma nova versão for encontrada, o sistema solicitará a atualização antes de continuar. Isso garante que você esteja sempre utilizando a versão mais segura e atualizada.
 
 ## Créditos
-** -Lucas Catão de Moraes** - https://cataodemoraes.com
-** -Dolutech** - https://dolutech.com
+** - Lucas Catão de Moraes ** - https://cataodemoraes.com
+** - Dolutech ** - https://dolutech.com
 
 Agradecemos por utilizar o Dolutech Security Automate System. Se tiver sugestões, problemas ou precisar de suporte, entre em contato conosco através dos links acima.
