@@ -4,6 +4,8 @@
 
 Bem-vindo ao **Dolutech Security Automate System (DSAS)**, uma ferramenta poderosa projetada para automatizar e facilitar a administração de servidores Linux. Este sistema foi criado para melhorar a segurança e simplificar a gestão de servidores, oferecendo uma série de funcionalidades automatizadas.
 
+### **Versão Estável: 0.0.3**
+
 ## Funcionalidades Principais
 
 - **Gerenciamento do SSH**
