@@ -47,12 +47,12 @@ Bem-vindo ao **Dolutech Security Automate System (DSAS)**, uma ferramenta podero
   - Ver Logs: Visualize os logs de atividades do sistema.
   - Limpar Logs: Limpe os logs armazenados.
  
- - **Instalação do pacote LAMP**
-  - Instalar pacote LAMP completo: Instala automaticamente Apache,PHP,Mysql e phpmyAdmin.
-  - Instalar Apache: instala o apache individual.
-  - Instalar php: instala o php individual.
-  - Instalar Mysql: instala o mysql com opção de senha diferente da Root server.
-  - Instalar phpmyAdmin: instala individual o phpMyadmin
+- **Instalação do pacote LAMP**
+   - Instalar pacote LAMP completo: Instala automaticamente Apache,PHP,Mysql e phpmyAdmin.
+   - Instalar Apache: instala o apache individual.
+   - Instalar php: instala o php individual.
+   - Instalar Mysql: instala o mysql com opção de senha diferente da Root server.
+   - Instalar phpmyAdmin: instala individual o phpMyadmin
 
 - **Forçar Atualização do DSAS**
   - Atualize o DSAS manualmente a qualquer momento para garantir que está usando a versão mais recente.
