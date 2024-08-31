@@ -2,7 +2,7 @@
 
 # Nome e versao do sistema
 SYSTEM_NAME="Dolutech Security Automate System (DSAS)"
-VERSION="0.0.3"
+VERSION="0.0.4"
 DSAS_DIR="/opt/DSAS"
 LOG_DIR="$DSAS_DIR/logs"
 VERSION_DIR="$DSAS_DIR/version"
@@ -118,8 +118,8 @@ change_ssh_port() {
         echo "Port $new_port" | sudo tee -a /etc/ssh/sshd_config
     fi
 
-    restart_ssh
     echo "Porta SSH alterada com sucesso para $new_port." | tee -a $LOG_FILE
+    restart_ssh
     read -p "Pressione Enter para voltar ao menu..."
 }
 
@@ -151,8 +151,8 @@ setup_2fa() {
         sudo sed -i "s/^KbdInteractiveAuthentication.*/#&/" /etc/ssh/sshd_config
     fi
 
-    restart_ssh
     echo "Configuracao do 2FA concluida com sucesso." | tee -a $LOG_FILE
+    restart_ssh
     read -p "Pressione Enter para voltar ao menu..."
 }
 
@@ -175,8 +175,8 @@ remove_2fa() {
         sudo yum remove -y google-authenticator
     fi
 
-    restart_ssh
     echo "2FA removido com sucesso." | tee -a $LOG_FILE
+    restart_ssh
     read -p "Pressione Enter para voltar ao menu..."
 }
 
@@ -401,31 +401,133 @@ clear_all_rules() {
     read -p "Pressione Enter para voltar ao menu..."
 }
 
-# Funcao para fazer verificacao completa do antivirus
-full_scan() {
-    sudo clamscan -r /
-    echo "Verificacao completa do sistema realizada." | tee -a $LOG_FILE
+# Funcao para instalar o pacote LAMP completo
+install_lamp_complete() {
+    echo "Instalando Apache, MySQL, PHP e PhpMyAdmin..." | tee -a $LOG_FILE
+    
+    # Instalar Apache
+    if [ "$DISTRO" = "debian" ]; then
+        sudo apt-get update
+        sudo apt-get install -y apache2
+    elif [ "$DISTRO" = "rhel" ]; then
+        sudo yum install -y httpd
+        sudo systemctl enable httpd
+        sudo systemctl start httpd
+    fi
+
+    # Instalar MySQL
+    if [ "$DISTRO" = "debian" ]; then
+        sudo apt-get install -y mysql-server
+    elif [ "$DISTRO" = "rhel" ]; then
+        sudo yum install -y mariadb-server mariadb
+        sudo systemctl enable mariadb
+        sudo systemctl start mariadb
+    fi
+    
+    # Definir senha do MySQL
+    read -sp "Digite a senha root para o MySQL: " mysql_root_password
+    echo
+    sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '$mysql_root_password';"
+    sudo mysql -e "FLUSH PRIVILEGES;"
+
+    # Instalar PHP
+    if [ "$DISTRO" = "debian" ]; then
+        sudo apt-get install -y lsb-release apt-transport-https ca-certificates
+        sudo wget -qO /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+        sudo sh -c 'echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
+        sudo apt-get update
+        sudo apt-get install -y php8.3 libapache2-mod-php8.3 php8.3-mysql
+    elif [ "$DISTRO" = "rhel" ]; then
+        sudo yum install -y epel-release
+        sudo yum install -y https://rpms.remirepo.net/enterprise/remi-release-8.rpm
+        sudo yum module reset php
+        sudo yum module enable php:remi-8.3
+        sudo yum install -y php php-mysqlnd
+    fi
+
+    # Instalar PhpMyAdmin
+    if [ "$DISTRO" = "debian" ]; then
+        sudo apt-get install -y phpmyadmin
+        sudo ln -s /usr/share/phpmyadmin /var/www/html/phpmyadmin
+    elif [ "$DISTRO" = "rhel" ]; then
+        sudo yum install -y epel-release
+        sudo yum install -y phpmyadmin
+        sudo ln -s /usr/share/phpmyadmin /var/www/html/phpmyadmin
+    fi
+
+    echo "Instalacao do pacote LAMP completo concluida." | tee -a $LOG_FILE
     read -p "Pressione Enter para voltar ao menu..."
 }
 
-# Funcao para fazer verificacao personalizada do antivirus
-custom_scan() {
-    read -p "Digite o caminho que deseja verificar: " path
-    sudo clamscan -r $path
-    echo "Verificacao personalizada do caminho $path realizada." | tee -a $LOG_FILE
+# Funcao para instalar Apache
+install_apache() {
+    echo "Instalando Apache..." | tee -a $LOG_FILE
+    if [ "$DISTRO" = "debian" ]; then
+        sudo apt-get update
+        sudo apt-get install -y apache2
+    elif [ "$DISTRO" = "rhel" ]; then
+        sudo yum install -y httpd
+        sudo systemctl enable httpd
+        sudo systemctl start httpd
+    fi
+    echo "Instalacao do Apache concluida." | tee -a $LOG_FILE
     read -p "Pressione Enter para voltar ao menu..."
 }
 
-# Funcao para ver os logs
-view_logs() {
-    cat $LOG_FILE
+# Funcao para instalar MySQL
+install_mysql() {
+    echo "Instalando MySQL..." | tee -a $LOG_FILE
+    if [ "$DISTRO" = "debian" ]; then
+        sudo apt-get update
+        sudo apt-get install -y mysql-server
+    elif [ "$DISTRO" = "rhel" ]; then
+        sudo yum install -y mariadb-server mariadb
+        sudo systemctl enable mariadb
+        sudo systemctl start mariadb
+    fi
+
+    read -sp "Digite a senha root para o MySQL: " mysql_root_password
+    echo
+    sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '$mysql_root_password';"
+    sudo mysql -e "FLUSH PRIVILEGES;"
+
+    echo "Instalacao do MySQL concluida." | tee -a $LOG_FILE
     read -p "Pressione Enter para voltar ao menu..."
 }
 
-# Funcao para limpar os logs
-clear_logs() {
-    > $LOG_FILE
-    echo "Logs limpos com sucesso." | tee -a $LOG_FILE
+# Funcao para instalar PHP
+install_php() {
+    echo "Instalando PHP 8.3..." | tee -a $LOG_FILE
+    if [ "$DISTRO" = "debian" ]; then
+        sudo apt-get install -y lsb-release apt-transport-https ca-certificates
+        sudo wget -qO /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+        sudo sh -c 'echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
+        sudo apt-get update
+        sudo apt-get install -y php8.3 libapache2-mod-php8.3 php8.3-mysql
+    elif [ "$DISTRO" = "rhel" ]; then
+        sudo yum install -y epel-release
+        sudo yum install -y https://rpms.remirepo.net/enterprise/remi-release-8.rpm
+        sudo yum module reset php
+        sudo yum module enable php:remi-8.3
+        sudo yum install -y php php-mysqlnd
+    fi
+    echo "Instalacao do PHP 8.3 concluida." | tee -a $LOG_FILE
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para instalar PhpMyAdmin
+install_phpmyadmin() {
+    echo "Instalando PhpMyAdmin..." | tee -a $LOG_FILE
+    if [ "$DISTRO" = "debian" ]; then
+        sudo apt-get update
+        sudo apt-get install -y phpmyadmin
+        sudo ln -s /usr/share/phpmyadmin /var/www/html/phpmyadmin
+    elif [ "$DISTRO" = "rhel" ]; then
+        sudo yum install -y epel-release
+        sudo yum install -y phpmyadmin
+        sudo ln -s /usr/share/phpmyadmin /var/www/html/phpmyadmin
+    fi
+    echo "Instalacao do PhpMyAdmin concluida." | tee -a $LOG_FILE
     read -p "Pressione Enter para voltar ao menu..."
 }
 
@@ -531,6 +633,34 @@ automation_management_menu() {
     done
 }
 
+# Menu de instalacao do pacote LAMP
+lamp_install_menu() {
+    while true; do
+        clear
+        echo "============================================"
+        echo " Instalar Pacotes LAMP"
+        echo "============================================"
+        echo "1) Instalar Pacote LAMP Completo"
+        echo "2) Instalar Apache"
+        echo "3) Instalar MySQL"
+        echo "4) Instalar PHP"
+        echo "5) Instalar PhpMyAdmin"
+        echo "6) Voltar ao Menu Principal"
+        echo "============================================"
+        read -p "Escolha uma opcao: " lamp_option
+
+        case $lamp_option in
+            1) install_lamp_complete ;;
+            2) install_apache ;;
+            3) install_mysql ;;
+            4) install_php ;;
+            5) install_phpmyadmin ;;
+            6) return ;;
+            *) echo "Opcao invalida. Tente novamente." ;;
+        esac
+    done
+}
+
 # Menu principal
 main_menu() {
     while true; do
@@ -545,11 +675,12 @@ main_menu() {
         echo "5) Gerir Automacao de Sistema"
         echo "6) Gerenciamento de Firewall"
         echo "7) Gerenciamento de Antivirus"
-        echo "8) Reiniciar Servidor"
-        echo "9) Ver Logs"
-        echo "10) Limpar Logs"
-        echo "11) Forcar Atualizacao do DSAS"
-        echo "12) Sair"
+        echo "8) Instalar Pacotes LAMP"
+        echo "9) Reiniciar Servidor"
+        echo "10) Ver Logs"
+        echo "11) Limpar Logs"
+        echo "12) Forcar Atualizacao do DSAS"
+        echo "13) Sair"
         echo "============================================"
         read -p "Escolha uma opcao: " option
 
@@ -561,11 +692,12 @@ main_menu() {
             5) automation_management_menu ;;
             6) firewall_management_menu ;;
             7) antivirus_management_menu ;;
-            8) reboot_server ;;
-            9) view_logs ;;
-            10) clear_logs ;;
-            11) force_update ;;
-            12) 
+            8) lamp_install_menu ;;
+            9) reboot_server ;;
+            10) view_logs ;;
+            11) clear_logs ;;
+            12) force_update ;;
+            13) 
                 echo "Voce acabou de sair do $SYSTEM_NAME"
                 echo "Caso precise de suporte e ajuda acesse nosso site https://dolutech.com"
                 exit 0
