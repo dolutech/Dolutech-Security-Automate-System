@@ -1,0 +1,37 @@
+# Dolutech Security Automate System (DSAS) Configuration File
+# Copy this file to /etc/dsas/dsas.conf or ~/.dsas/dsas.conf
+
+# System Settings
+DSAS_DIR="/opt/DSAS"
+LOG_DIR="${DSAS_DIR}/logs"
+VERSION_DIR="${DSAS_DIR}/version"
+
+# GitHub Repository Settings
+GITHUB_REPO_RAW="https://raw.githubusercontent.com/dolutech/Dolutech-Security-Automate-System/main"
+GITHUB_REPO_URL="https://github.com/dolutech/Dolutech-Security-Automate-System"
+
+# Auto-update Settings
+AUTO_UPDATE_ENABLED=true
+AUTO_UPDATE_CHECK_ON_START=true
+
+# Security Settings
+MINIMUM_PASSWORD_LENGTH=8
+REQUIRE_PASSWORD_COMPLEXITY=false
+
+# Firewall Settings
+AUTO_SAVE_IPTABLES=true
+WARN_ON_CRITICAL_PORTS=true
+
+# ClamAV Settings
+AUTO_UPDATE_CLAMAV=true
+CLAMAV_SCAN_THREADS=2
+
+# Logging Settings
+LOG_LEVEL="INFO"  # DEBUG, INFO, WARNING, ERROR
+LOG_ROTATION_ENABLED=true
+LOG_MAX_SIZE_MB=100
+LOG_MAX_FILES=5
+
+# Backup Settings
+BACKUP_BEFORE_CHANGES=true
+BACKUP_DIR="${DSAS_DIR}/backups"
