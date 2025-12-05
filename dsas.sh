@@ -1,8 +1,11 @@
 #!/bin/bash
 
+# Enable error handling
+set -o pipefail
+
 # Nome e versao do sistema
 SYSTEM_NAME="Dolutech Security Automate System (DSAS)"
-VERSION="0.0.4"
+VERSION="0.0.5"
 DSAS_DIR="/opt/DSAS"
 LOG_DIR="$DSAS_DIR/logs"
 VERSION_DIR="$DSAS_DIR/version"
@@ -11,6 +14,96 @@ VERSION_FILE="$VERSION_DIR/version.txt"
 SCRIPT_NAME="dsas.sh"
 SCRIPT_PATH="$DSAS_DIR/$SCRIPT_NAME"
 GITHUB_REPO_RAW="https://raw.githubusercontent.com/dolutech/Dolutech-Security-Automate-System/main"
+
+# Funcoes de validacao de entrada
+
+# Valida numero de porta (1-65535)
+validate_port() {
+    local port=$1
+    if [[ ! "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+        return 1
+    fi
+    return 0
+}
+
+# Valida endereco IPv4
+validate_ipv4() {
+    local ip=$1
+    local regex='^([0-9]{1,3}\.){3}[0-9]{1,3}$'
+
+    if [[ ! $ip =~ $regex ]]; then
+        return 1
+    fi
+
+    # Verificar se cada octeto esta entre 0-255
+    IFS='.' read -ra OCTETS <<< "$ip"
+    for octet in "${OCTETS[@]}"; do
+        if [ "$octet" -gt 255 ]; then
+            return 1
+        fi
+    done
+    return 0
+}
+
+# Valida endereco IPv6
+validate_ipv6() {
+    local ip=$1
+    # Regex simples para IPv6
+    local regex='^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$'
+
+    if [[ $ip =~ $regex ]]; then
+        return 0
+    fi
+    return 1
+}
+
+# Valida caminho de arquivo/diretorio
+validate_path() {
+    local path=$1
+    # Impedir caracteres perigosos em caminhos
+    if [[ "$path" =~ [;\|\&\$\`] ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# Valida hostname
+validate_hostname() {
+    local hostname=$1
+    local regex='^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$'
+
+    if [[ $hostname =~ $regex ]]; then
+        return 0
+    fi
+    return 1
+}
+
+# Funcao para log de erro
+log_error() {
+    local message="$1"
+    echo "[ERRO $(date '+%Y-%m-%d %H:%M:%S')] $message" | tee -a $LOG_FILE >&2
+}
+
+# Funcao para log de informacao
+log_info() {
+    local message="$1"
+    echo "[INFO $(date '+%Y-%m-%d %H:%M:%S')] $message" | tee -a $LOG_FILE
+}
+
+# Funcao para log de sucesso
+log_success() {
+    local message="$1"
+    echo "[SUCESSO $(date '+%Y-%m-%d %H:%M:%S')] $message" | tee -a $LOG_FILE
+}
+
+# Funcao para verificar se comando foi bem-sucedido
+check_command() {
+    if [ $? -ne 0 ]; then
+        log_error "$1"
+        return 1
+    fi
+    return 0
+}
 
 # Funcao para detectar a distribuicao
 detect_distro() {
@@ -109,17 +202,39 @@ install_clamav() {
 change_ssh_port() {
     read -p "Digite a nova porta SSH: " new_port
 
+    # Validar porta
+    if ! validate_port "$new_port"; then
+        log_error "Porta invalida. Por favor, digite um numero entre 1 e 65535."
+        read -p "Pressione Enter para voltar ao menu..."
+        return 1
+    fi
+
+    # Avisar sobre portas bem conhecidas
+    if [ "$new_port" -lt 1024 ] && [ "$new_port" -ne 22 ]; then
+        echo "AVISO: Porta $new_port esta na faixa de portas privilegiadas (1-1023)."
+        read -p "Tem certeza que deseja continuar? (s/n): " confirm
+        if [[ ! $confirm =~ ^[Ss]$ ]]; then
+            log_info "Alteracao de porta SSH cancelada pelo usuario."
+            read -p "Pressione Enter para voltar ao menu..."
+            return 0
+        fi
+    fi
+
+    log_info "Alterando porta SSH para $new_port"
+
     # Substituindo a linha Port independentemente do valor atual
     if grep -q "^#Port" /etc/ssh/sshd_config; then
         sudo sed -i "s/^#Port.*/Port $new_port/" /etc/ssh/sshd_config
     elif grep -q "^Port" /etc/ssh/sshd_config; then
         sudo sed -i "s/^Port.*/Port $new_port/" /etc/ssh/sshd_config
     else
-        echo "Port $new_port" | sudo tee -a /etc/ssh/sshd_config
+        echo "Port $new_port" | sudo tee -a /etc/ssh/sshd_config > /dev/null
     fi
 
-    echo "Porta SSH alterada com sucesso para $new_port." | tee -a $LOG_FILE
-    restart_ssh
+    if check_command "Erro ao alterar porta SSH"; then
+        log_success "Porta SSH alterada com sucesso para $new_port."
+        restart_ssh
+    fi
     read -p "Pressione Enter para voltar ao menu..."
 }
 
@@ -202,13 +317,29 @@ fix_cve_menu() {
 change_hostname() {
     read -p "Digite o novo hostname do servidor: " new_hostname
 
+    # Validar hostname
+    if ! validate_hostname "$new_hostname"; then
+        log_error "Hostname invalido. Use apenas letras, numeros e hifens."
+        read -p "Pressione Enter para voltar ao menu..."
+        return 1
+    fi
+
+    local old_hostname
+    old_hostname=$(hostname)
+
+    log_info "Alterando hostname de '$old_hostname' para '$new_hostname'"
+
     # Alterando o hostname atual
     sudo hostnamectl set-hostname "$new_hostname"
+    if ! check_command "Erro ao alterar hostname"; then
+        read -p "Pressione Enter para voltar ao menu..."
+        return 1
+    fi
 
-    # Alterando o hostname no arquivo /etc/hosts
-    sudo sed -i "s/$(hostname)/$new_hostname/g" /etc/hosts
+    # Alterando o hostname no arquivo /etc/hosts de forma segura
+    sudo sed -i "s/\b${old_hostname}\b/${new_hostname}/g" /etc/hosts
 
-    echo "Hostname alterado com sucesso para $new_hostname." | tee -a $LOG_FILE
+    log_success "Hostname alterado com sucesso para $new_hostname."
     read -p "Pressione Enter para voltar ao menu..."
 }
 
@@ -345,8 +476,32 @@ reboot_server() {
 # Funcao para bloquear porta no servidor
 block_port() {
     read -p "Digite a porta que deseja bloquear: " port
-    sudo iptables -A INPUT -p tcp --dport $port -j DROP
-    echo "Porta $port bloqueada com sucesso." | tee -a $LOG_FILE
+
+    # Validar porta
+    if ! validate_port "$port"; then
+        log_error "Porta invalida. Por favor, digite um numero entre 1 e 65535."
+        read -p "Pressione Enter para voltar ao menu..."
+        return 1
+    fi
+
+    # Avisar sobre portas criticas
+    if [ "$port" -eq 22 ] || [ "$port" -eq "$(grep "^Port" /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}')" ]; then
+        echo "AVISO: Bloquear a porta SSH pode resultar em perda de acesso remoto!"
+        read -p "Tem certeza que deseja continuar? (s/n): " confirm
+        if [[ ! $confirm =~ ^[Ss]$ ]]; then
+            log_info "Bloqueio de porta $port cancelado pelo usuario."
+            read -p "Pressione Enter para voltar ao menu..."
+            return 0
+        fi
+    fi
+
+    log_info "Bloqueando porta $port"
+    sudo iptables -A INPUT -p tcp --dport "$port" -j DROP
+
+    if check_command "Erro ao bloquear porta"; then
+        log_success "Porta $port bloqueada com sucesso."
+        save_iptables_rules
+    fi
     read -p "Pressione Enter para voltar ao menu..."
 }
 
@@ -362,8 +517,21 @@ unblock_port() {
 # Funcao para bloquear IP
 block_ip() {
     read -p "Digite o IP que deseja bloquear: " ip
-    sudo iptables -A INPUT -s $ip -j DROP
-    echo "IP $ip bloqueado com sucesso." | tee -a $LOG_FILE
+
+    # Validar IP (IPv4 ou IPv6)
+    if ! validate_ipv4 "$ip" && ! validate_ipv6 "$ip"; then
+        log_error "Endereco IP invalido."
+        read -p "Pressione Enter para voltar ao menu..."
+        return 1
+    fi
+
+    log_info "Bloqueando IP $ip"
+    sudo iptables -A INPUT -s "$ip" -j DROP
+
+    if check_command "Erro ao bloquear IP"; then
+        log_success "IP $ip bloqueado com sucesso."
+        save_iptables_rules
+    fi
     read -p "Pressione Enter para voltar ao menu..."
 }
 
@@ -379,9 +547,30 @@ unblock_ip() {
 # Funcao para liberar porta para IP especifico
 allow_ip_port() {
     read -p "Digite o IP que deseja liberar: " ip
+
+    # Validar IP
+    if ! validate_ipv4 "$ip" && ! validate_ipv6 "$ip"; then
+        log_error "Endereco IP invalido."
+        read -p "Pressione Enter para voltar ao menu..."
+        return 1
+    fi
+
     read -p "Digite a porta que deseja liberar: " port
-    sudo iptables -A INPUT -p tcp -s $ip --dport $port -j ACCEPT
-    echo "Porta $port liberada para o IP $ip." | tee -a $LOG_FILE
+
+    # Validar porta
+    if ! validate_port "$port"; then
+        log_error "Porta invalida. Por favor, digite um numero entre 1 e 65535."
+        read -p "Pressione Enter para voltar ao menu..."
+        return 1
+    fi
+
+    log_info "Liberando porta $port para IP $ip"
+    sudo iptables -A INPUT -p tcp -s "$ip" --dport "$port" -j ACCEPT
+
+    if check_command "Erro ao liberar porta para IP"; then
+        log_success "Porta $port liberada para o IP $ip."
+        save_iptables_rules
+    fi
     read -p "Pressione Enter para voltar ao menu..."
 }
 
@@ -394,10 +583,157 @@ remove_allow_ip_port() {
     read -p "Pressione Enter para voltar ao menu..."
 }
 
+# Funcao para salvar regras do iptables
+save_iptables_rules() {
+    log_info "Salvando regras do iptables..."
+
+    if [ "$DISTRO" = "debian" ]; then
+        # Instalar iptables-persistent se necessario
+        if ! dpkg -l | grep -q iptables-persistent; then
+            echo "Instalando iptables-persistent para persistir regras..."
+            echo iptables-persistent iptables-persistent/autosave_v4 boolean true | sudo debconf-set-selections
+            echo iptables-persistent iptables-persistent/autosave_v6 boolean true | sudo debconf-set-selections
+            sudo apt-get install -y iptables-persistent
+        fi
+        sudo netfilter-persistent save
+    elif [ "$DISTRO" = "rhel" ]; then
+        sudo service iptables save
+    fi
+
+    if check_command "Erro ao salvar regras do iptables"; then
+        log_success "Regras do iptables salvas com sucesso."
+    fi
+}
+
 # Funcao para limpar todas as regras do IPTables
 clear_all_rules() {
+    read -p "Tem certeza que deseja limpar TODAS as regras do iptables? (s/n): " confirm
+    if [[ ! $confirm =~ ^[Ss]$ ]]; then
+        log_info "Limpeza de regras cancelada pelo usuario."
+        read -p "Pressione Enter para voltar ao menu..."
+        return 0
+    fi
+
+    log_info "Limpando todas as regras do iptables"
     sudo iptables -F
-    echo "Todas as regras do IPTables foram limpas." | tee -a $LOG_FILE
+    sudo iptables -X
+    sudo iptables -t nat -F
+    sudo iptables -t nat -X
+    sudo iptables -t mangle -F
+    sudo iptables -t mangle -X
+
+    if check_command "Erro ao limpar regras"; then
+        log_success "Todas as regras do IPTables foram limpas."
+        save_iptables_rules
+    fi
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para visualizar logs do sistema
+view_logs() {
+    clear
+    echo "============================================"
+    echo " Visualizacao de Logs do Sistema"
+    echo "============================================"
+    echo ""
+
+    if [ ! -f "$LOG_FILE" ]; then
+        echo "Arquivo de log nao encontrado." | tee -a $LOG_FILE
+        read -p "Pressione Enter para voltar ao menu..."
+        return
+    fi
+
+    echo "Ultimas 50 linhas do log do DSAS:"
+    echo "============================================"
+    tail -n 50 "$LOG_FILE"
+    echo "============================================"
+    echo ""
+    echo "Para ver o log completo, acesse: $LOG_FILE"
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para limpar logs do sistema
+clear_logs() {
+    clear
+    echo "============================================"
+    echo " Limpeza de Logs do Sistema"
+    echo "============================================"
+
+    read -p "Tem certeza que deseja limpar todos os logs? (s/n): " confirm
+    if [[ $confirm =~ ^[Ss]$ ]]; then
+        if [ -f "$LOG_FILE" ]; then
+            echo "Limpando logs do DSAS..." | tee -a $LOG_FILE
+            > "$LOG_FILE"
+            echo "Logs limpos com sucesso em $(date)" | tee -a $LOG_FILE
+        else
+            echo "Arquivo de log nao encontrado."
+        fi
+    else
+        echo "Limpeza de logs cancelada." | tee -a $LOG_FILE
+    fi
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para fazer verificacao completa do antivirus
+full_scan() {
+    clear
+    echo "============================================"
+    echo " Verificacao Completa do Antivirus"
+    echo "============================================"
+    echo ""
+
+    # Atualizar base de dados do ClamAV
+    echo "Atualizando base de dados do ClamAV..." | tee -a $LOG_FILE
+    sudo freshclam
+
+    echo ""
+    echo "Iniciando verificacao completa do sistema..."
+    echo "AVISO: Esta operacao pode levar muito tempo."
+    echo "Os resultados serao salvos em: $LOG_DIR/clamav_full_scan.log"
+    echo ""
+
+    read -p "Pressione Enter para iniciar a verificacao..."
+
+    # Executar scan completo
+    sudo clamscan -r -i --log="$LOG_DIR/clamav_full_scan.log" / 2>&1 | tee -a $LOG_FILE
+
+    echo ""
+    echo "Verificacao completa concluida." | tee -a $LOG_FILE
+    echo "Resultados salvos em: $LOG_DIR/clamav_full_scan.log"
+    read -p "Pressione Enter para voltar ao menu..."
+}
+
+# Funcao para fazer verificacao personalizada do antivirus
+custom_scan() {
+    clear
+    echo "============================================"
+    echo " Verificacao Personalizada do Antivirus"
+    echo "============================================"
+    echo ""
+
+    read -p "Digite o caminho do diretorio que deseja verificar: " scan_path
+
+    if [ ! -d "$scan_path" ]; then
+        echo "Erro: O diretorio '$scan_path' nao existe." | tee -a $LOG_FILE
+        read -p "Pressione Enter para voltar ao menu..."
+        return
+    fi
+
+    # Atualizar base de dados do ClamAV
+    echo "Atualizando base de dados do ClamAV..." | tee -a $LOG_FILE
+    sudo freshclam
+
+    echo ""
+    echo "Iniciando verificacao de: $scan_path"
+    echo "Os resultados serao salvos em: $LOG_DIR/clamav_custom_scan.log"
+    echo ""
+
+    # Executar scan personalizado
+    sudo clamscan -r -i --log="$LOG_DIR/clamav_custom_scan.log" "$scan_path" 2>&1 | tee -a $LOG_FILE
+
+    echo ""
+    echo "Verificacao concluida." | tee -a $LOG_FILE
+    echo "Resultados salvos em: $LOG_DIR/clamav_custom_scan.log"
     read -p "Pressione Enter para voltar ao menu..."
 }
 
@@ -424,11 +760,22 @@ install_lamp_complete() {
         sudo systemctl start mariadb
     fi
     
-    # Definir senha do MySQL
+    # Definir senha do MySQL de forma segura
     read -sp "Digite a senha root para o MySQL: " mysql_root_password
     echo
-    sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '$mysql_root_password';"
-    sudo mysql -e "FLUSH PRIVILEGES;"
+
+    # Validar senha (minimo 8 caracteres)
+    if [ ${#mysql_root_password} -lt 8 ]; then
+        log_error "A senha deve ter pelo menos 8 caracteres."
+        read -p "Pressione Enter para voltar ao menu..."
+        return 1
+    fi
+
+    # Usar pipe para passar senha de forma segura
+    echo "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '$mysql_root_password';" | sudo mysql
+    echo "FLUSH PRIVILEGES;" | sudo mysql
+
+    unset mysql_root_password  # Limpar senha da memoria
 
     # Instalar PHP
     if [ "$DISTRO" = "debian" ]; then
@@ -488,8 +835,19 @@ install_mysql() {
 
     read -sp "Digite a senha root para o MySQL: " mysql_root_password
     echo
-    sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '$mysql_root_password';"
-    sudo mysql -e "FLUSH PRIVILEGES;"
+
+    # Validar senha (minimo 8 caracteres)
+    if [ ${#mysql_root_password} -lt 8 ]; then
+        log_error "A senha deve ter pelo menos 8 caracteres."
+        read -p "Pressione Enter para voltar ao menu..."
+        return 1
+    fi
+
+    # Usar pipe para passar senha de forma segura
+    echo "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '$mysql_root_password';" | sudo mysql
+    echo "FLUSH PRIVILEGES;" | sudo mysql
+
+    unset mysql_root_password  # Limpar senha da memoria
 
     echo "Instalacao do MySQL concluida." | tee -a $LOG_FILE
     read -p "Pressione Enter para voltar ao menu..."
@@ -570,8 +928,10 @@ firewall_management_menu() {
         echo "4) Desbloqueio de IP"
         echo "5) Liberar Porta para um IP Especifico"
         echo "6) Remover Liberacao de Porta para um IP Especifico"
-        echo "7) Limpar Todas as Regras Criadas"
-        echo "8) Voltar ao Menu Principal"
+        echo "7) Visualizar Regras Atuais"
+        echo "8) Salvar Regras do Firewall"
+        echo "9) Limpar Todas as Regras Criadas"
+        echo "10) Voltar ao Menu Principal"
         echo "============================================"
         read -p "Escolha uma opcao: " firewall_option
 
@@ -582,8 +942,10 @@ firewall_management_menu() {
             4) unblock_ip ;;
             5) allow_ip_port ;;
             6) remove_allow_ip_port ;;
-            7) clear_all_rules ;;
-            8) return ;;
+            7) sudo iptables -L -v -n --line-numbers; read -p "Pressione Enter para continuar..." ;;
+            8) save_iptables_rules; read -p "Pressione Enter para continuar..." ;;
+            9) clear_all_rules ;;
+            10) return ;;
             *) echo "Opcao invalida. Tente novamente." ;;
         esac
     done

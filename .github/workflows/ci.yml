@@ -1,0 +1,83 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  shellcheck:
+    name: ShellCheck Linting
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run ShellCheck
+      uses: ludeeus/action-shellcheck@master
+      with:
+        severity: warning
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install BATS
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bats
+
+    - name: Run tests
+      run: |
+        if [ -d "tests" ]; then
+          bats tests/*.bats
+        else
+          echo "No tests directory found, skipping tests"
+        fi
+
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  validate-syntax:
+    name: Validate Bash Syntax
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Validate bash syntax
+      run: |
+        bash -n dsas.sh
+        if [ -d "lib" ]; then
+          for file in lib/*.sh; do
+            if [ -f "$file" ]; then
+              bash -n "$file"
+            fi
+          done
+        fi
